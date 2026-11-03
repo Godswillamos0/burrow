@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: burrow-waitlist
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20.17.0
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: ADMIN_SECRET_KEY
+        generateValue: true
+      - key: NEXT_PUBLIC_SITE_URL
+        value: https://burrow-waitlist.onrender.com
+      - key: NEXT_PUBLIC_CHAIN_ID
+        value: "4663"
+      - key: NEXT_PUBLIC_RPC_URL
+        value: https://rpc.mainnet.chain.robinhood.com

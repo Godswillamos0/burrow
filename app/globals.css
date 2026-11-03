@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0c0714;
+  --foreground: #fef3c7;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Silkscreen', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Crisp Retro Pixel Graphics */
+.image-rendering-pixelated {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Retro CRT scanlines overlay */
+.scanlines {
+  position: relative;
+}
+.scanlines::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+  background-size: 100% 4px;
+  z-index: 20;
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+/* Custom Underground Cave Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #0c0714;
+  border-left: 2px solid #26193b;
+}
+::-webkit-scrollbar-thumb {
+  background: #fbbf24;
+  border: 2px solid #000;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #f59e0b;
+}
+
+/* Button & Card retro tap animations */
+button:active {
+  transform: translateY(2px);
+}
+
+::selection {
+  background-color: #fbbf24;
+  color: #000000;
+}
