@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import { sounds } from '@/lib/audio';
 import { BURROW_CONFIG } from '@/lib/config';
 import { PixelMiner, PixelCoin } from './PixelMinerArt';
+import { MinerIdCard } from './MinerIdCard';
 import {
   Twitter,
   Wallet,
@@ -243,103 +244,46 @@ export function JoinSection({ onJoinSuccess, referralCodeFromCookie }: JoinSecti
   // -------------------------------------------------------------
   if (joinedUser) {
     return (
-      <div id="join-section" className="max-w-2xl mx-auto px-4 py-8">
-        <div className="bg-burrow-card border-4 border-burrow-gold shadow-pixel-lg p-6 sm:p-8 relative overflow-hidden">
-          {/* Gold banner tag */}
-          <div className="absolute top-0 right-0 bg-burrow-gold text-black font-pixel text-[10px] sm:text-xs px-3 py-1 font-bold shadow-pixel-sm">
-            VERIFIED MINER PASS
-          </div>
+      <div id="join-section" className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+        {/* Dynamic Generatable Miner Permit Card with PFP, Rank & Download */}
+        <MinerIdCard
+          handle={joinedUser.x_handle}
+          avatarUrl={joinedUser.x_avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${joinedUser.x_handle}`}
+          wallet={joinedUser.wallet}
+          rank={userRank || 1}
+          points={joinedUser.points}
+          referrals={joinedUser.referrals}
+          refCode={joinedUser.ref_code}
+        />
 
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 mb-6">
-            <div className="relative">
-              <PixelMiner size={110} className="filter drop-shadow-[0_4px_12px_rgba(251,191,36,0.4)]" />
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-amber-400 text-black font-pixel text-[9px] px-2 py-0.5 border border-amber-900 shadow-pixel-sm whitespace-nowrap">
-                #{userRank || 1} IN LINE
-              </div>
-            </div>
-
-            <div className="flex-1 text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
-                <h2 className="font-pixel text-xl sm:text-2xl text-burrow-cream">
-                  @{joinedUser.x_handle}
-                </h2>
-                <CheckCircle size={20} className="text-emerald-400" />
-              </div>
-              <p className="font-silkscreen text-xs text-burrow-muted mb-3">
-                Wallet: <span className="text-amber-200 font-mono text-[11px]">{joinedUser.wallet.slice(0, 6)}...{joinedUser.wallet.slice(-4)}</span>
-              </p>
-
-              {/* Status Badge */}
-              <div className="inline-flex items-center gap-2 bg-burrow-surface border-2 border-burrow-border px-3 py-1 text-xs font-pixel text-burrow-cream">
-                <Sparkles size={14} className="text-burrow-gold animate-spin" />
-                <span>ALLOWLIST STATUS: <span className="text-emerald-400">ACTIVE</span></span>
-              </div>
-            </div>
-          </div>
-
-          {/* Stats Bar */}
-          <div className="grid grid-cols-3 gap-3 my-6 p-4 bg-burrow-surface border-2 border-burrow-border text-center">
-            <div>
-              <p className="text-[10px] font-pixel text-burrow-muted">YOUR RANK</p>
-              <p className="font-pixel text-lg sm:text-xl text-burrow-gold mt-1">
-                #{userRank || 1}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] font-pixel text-burrow-muted">REFERRALS</p>
-              <p className="font-pixel text-lg sm:text-xl text-emerald-400 mt-1">
-                {joinedUser.referrals}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] font-pixel text-burrow-muted">TOTAL POINTS</p>
-              <p className="font-pixel text-lg sm:text-xl text-burrow-cream mt-1">
-                {joinedUser.points} <span className="text-xs text-burrow-gold">PTS</span>
-              </p>
-            </div>
-          </div>
-
-          {/* Points Formula Note */}
-          <p className="text-[11px] font-silkscreen text-burrow-muted text-center mb-6">
-            10 Base Points + 5 Points per successful recruit. Top ranked miners claim Guaranteed Allowlist spots!
-          </p>
-
-          {/* Referral Link Box */}
-          <div className="mb-6">
-            <label className="block text-[11px] font-pixel text-burrow-cream mb-2">
-              YOUR EXCLUSIVE REFERRAL LINK:
-            </label>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="text"
-                readOnly
-                value={getReferralUrl()}
-                className="flex-1 bg-burrow-darkest border-2 border-burrow-border px-3 py-2 text-xs font-mono text-amber-300 selection:bg-amber-600 focus:outline-none"
-              />
-              <button
-                onClick={handleCopyLink}
-                className="px-4 py-2.5 bg-burrow-gold hover:bg-yellow-400 text-black font-pixel text-xs border-2 border-amber-200 shadow-pixel transition-transform active:translate-y-0.5 flex items-center justify-center gap-1.5 font-bold"
-              >
-                <Copy size={14} />
-                <span>{copiedLink ? 'COPIED!' : 'COPY'}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Viral Post on X Button */}
-          <div className="flex flex-col sm:flex-row gap-3">
+        {/* Exclusive Referral Recruit Link Module */}
+        <div className="bg-burrow-card border-4 border-burrow-border p-5 shadow-pixel-sm">
+          <label className="block text-[11px] font-pixel text-burrow-cream mb-2">
+            YOUR EXCLUSIVE RECRUIT LINK:
+          </label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              readOnly
+              value={getReferralUrl()}
+              className="flex-1 bg-burrow-darkest border-2 border-burrow-border px-3 py-2 text-xs font-mono text-amber-300 selection:bg-amber-600 focus:outline-none"
+            />
             <button
-              onClick={handleShareOnX}
-              className="flex-1 py-3 px-4 bg-sky-500 hover:bg-sky-400 text-black font-pixel text-xs border-2 border-sky-300 shadow-pixel flex items-center justify-center gap-2 font-bold transition-transform active:translate-y-0.5"
+              onClick={handleCopyLink}
+              className="px-5 py-2.5 bg-burrow-gold hover:bg-yellow-400 text-black font-pixel text-xs border-2 border-amber-200 shadow-pixel transition-transform active:translate-y-0.5 flex items-center justify-center gap-1.5 font-bold"
             >
-              <Twitter size={16} />
-              <span>POST ON X TO RECRUIT (+5 PTS)</span>
+              <Copy size={14} />
+              <span>{copiedLink ? 'COPIED!' : 'COPY LINK'}</span>
             </button>
+          </div>
+
+          <div className="flex items-center justify-between mt-4 pt-3 border-t border-burrow-border/80 text-xs font-silkscreen text-burrow-muted">
+            <span>Invite friends: each recruit earns you <span className="text-emerald-400 font-pixel">+5 PTS</span></span>
             <button
               onClick={handleLogout}
-              className="py-3 px-4 bg-burrow-surface hover:bg-burrow-card border-2 border-burrow-border text-burrow-muted hover:text-white font-pixel text-[10px] transition-colors"
+              className="text-[10px] font-pixel text-burrow-muted hover:text-red-400 underline"
             >
-              DISCONNECT
+              Disconnect
             </button>
           </div>
         </div>
