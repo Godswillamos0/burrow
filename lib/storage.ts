@@ -213,6 +213,9 @@ export async function joinWaitlist({
       .single();
 
     if (error) {
+      if (error.code === 'PGRST205' || error.message?.includes('waitlist')) {
+        throw new Error("Supabase table 'waitlist' has not been created yet. Please execute the script in supabase/schema.sql in your Supabase SQL Editor.");
+      }
       throw new Error(error.message);
     }
 
@@ -262,30 +265,36 @@ export async function joinWaitlist({
 
 export async function getLeaderboardAndStats() {
   if (isSupabaseConfigured && supabaseAdmin) {
-    // Total count
-    const { count: totalSignups } = await supabaseAdmin
-      .from('waitlist')
-      .select('*', { count: 'exact', head: true });
+    try {
+      // Total count
+      const { count: totalSignups, error: countErr } = await supabaseAdmin
+        .from('waitlist')
+        .select('*', { count: 'exact', head: true });
 
-    // Top 10
-    const { data: top10 } = await supabaseAdmin
-      .from('waitlist')
-      .select('id, x_handle, x_avatar, wallet, points, referrals, created_at')
-      .order('points', { ascending: false })
-      .order('created_at', { ascending: true })
-      .limit(10);
+      // Top 10
+      const { data: top10, error: topErr } = await supabaseAdmin
+        .from('waitlist')
+        .select('id, x_handle, x_avatar, wallet, points, referrals, created_at')
+        .order('points', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(10);
 
-    const formattedLeaderboard = (top10 || []).map((item, index) => ({
-      ...item,
-      rank: index + 1,
-    }));
+      if (!countErr && !topErr && top10 && top10.length > 0) {
+        const formattedLeaderboard = top10.map((item, index) => ({
+          ...item,
+          rank: index + 1,
+        }));
 
-    return {
-      totalSignups: (totalSignups || 0) + 1240, // Base marketing seed offset as stated in build guide targets
-      realCount: totalSignups || 0,
-      leaderboard: formattedLeaderboard,
-      isLiveDb: true,
-    };
+        return {
+          totalSignups: (totalSignups || 0) + 1240, // Base marketing seed offset
+          realCount: totalSignups || 0,
+          leaderboard: formattedLeaderboard,
+          isLiveDb: true,
+        };
+      }
+    } catch (err) {
+      console.warn('Supabase query error:', err);
+    }
   }
 
   // Fallback in-memory
