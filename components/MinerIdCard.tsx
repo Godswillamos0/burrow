@@ -3,54 +3,57 @@
 import React, { useRef, useState } from 'react';
 import { sounds } from '@/lib/audio';
 import { BURROW_CONFIG } from '@/lib/config';
-import { PixelPickaxe, PixelCoin, PixelMiner } from './PixelMinerArt';
-import { Download, Share2, Twitter, CheckCircle, Sparkles, Shield, Camera } from 'lucide-react';
+import { PixelPickaxe } from './PixelMinerArt';
+import { Download, Twitter, Camera } from 'lucide-react';
 
 interface MinerIdCardProps {
   handle: string;
-  avatarUrl?: string;
   wallet: string;
   rank: number;
-  points: number;
-  referrals: number;
   refCode: string;
+  tasksCompleted: Record<string, boolean>;
+}
+
+// Real Twitter PFP via unavatar.io — free, no API key required
+export function getAvatarUrl(handle: string): string {
+  const clean = handle.replace(/^@/, '');
+  return `https://unavatar.io/x/${clean}`;
 }
 
 export function MinerIdCard({
   handle,
-  avatarUrl,
   wallet,
   rank,
-  points,
-  referrals,
   refCode,
+  tasksCompleted,
 }: MinerIdCardProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
 
   const cleanHandle = handle.replace(/^@/, '');
+  const avatarUrl = getAvatarUrl(cleanHandle);
   const maskedWallet = wallet ? `${wallet.slice(0, 6)}...${wallet.slice(-4)}` : '0x000...000';
   const referralUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/r/${refCode}`
     : `https://burrow.xyz/r/${refCode}`;
 
-  const isGuaranteed = rank <= 500;
+  const completedCount = Object.values(tasksCompleted).filter(Boolean).length;
+  const totalTasks = BURROW_CONFIG.tasks.length;
+  const isFullyApproved = completedCount >= totalTasks;
 
-  // Generate downloadable high-resolution PNG using HTML5 Canvas
+  // Generate downloadable 1200x675 PNG card
   const handleDownloadPng = async () => {
     sounds.playCoin();
     setIsGenerating(true);
-
     try {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // 1200x675 (ideal 16:9 Twitter & social card size)
       canvas.width = 1200;
       canvas.height = 675;
 
-      // 1. Dark Underground Cave Background
+      // Background
       const bgGrad = ctx.createLinearGradient(0, 0, 1200, 675);
       bgGrad.addColorStop(0, '#10081c');
       bgGrad.addColorStop(0.5, '#190e2a');
@@ -58,294 +61,222 @@ export function MinerIdCard({
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, 1200, 675);
 
-      // Cave grid pattern
+      // Grid pattern
       ctx.strokeStyle = 'rgba(251, 191, 36, 0.05)';
       ctx.lineWidth = 1;
-      for (let x = 0; x < 1200; x += 40) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, 675);
-        ctx.stroke();
-      }
-      for (let y = 0; y < 675; y += 40) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(1200, y);
-        ctx.stroke();
-      }
+      for (let x = 0; x < 1200; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 675); ctx.stroke(); }
+      for (let y = 0; y < 675; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(1200, y); ctx.stroke(); }
 
-      // Outer Gold Pixel Border
-      ctx.strokeStyle = '#fbbf24';
-      ctx.lineWidth = 8;
+      // Outer gold border
+      ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 8;
       ctx.strokeRect(20, 20, 1160, 635);
-
-      // Inner Border
-      ctx.strokeStyle = '#3d275e';
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#3d275e'; ctx.lineWidth = 3;
       ctx.strokeRect(32, 32, 1136, 611);
 
-      // Top Banner Header
+      // Header
       ctx.fillStyle = '#26193b';
       ctx.fillRect(36, 36, 1128, 85);
-
-      // Header Text
       ctx.fillStyle = '#fbbf24';
       ctx.font = 'bold 28px monospace';
       ctx.fillText('⛏️ BURROW MINING PERMIT // 2,500 WORKERS', 60, 90);
 
-      // Network Pill
-      ctx.fillStyle = '#052e16';
-      ctx.fillRect(860, 52, 280, 48);
-      ctx.strokeStyle = '#22c55e';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(860, 52, 280, 48);
-      ctx.fillStyle = '#4ade80';
-      ctx.font = 'bold 18px monospace';
+      // Network pill
+      ctx.fillStyle = '#052e16'; ctx.fillRect(860, 52, 280, 48);
+      ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 2; ctx.strokeRect(860, 52, 280, 48);
+      ctx.fillStyle = '#4ade80'; ctx.font = 'bold 18px monospace';
       ctx.fillText('● ROBINHOOD CHAIN (4663)', 875, 83);
 
-      // Left: Avatar Photo Frame
-      const avatarX = 70;
-      const avatarY = 160;
-      const avatarSize = 220;
-
-      // Photo frame backing
-      ctx.fillStyle = '#0c0714';
-      ctx.fillRect(avatarX, avatarY, avatarSize, avatarSize);
-      ctx.strokeStyle = isGuaranteed ? '#fbbf24' : '#38bdf8';
-      ctx.lineWidth = 6;
+      // Avatar frame
+      const avatarX = 70, avatarY = 160, avatarSize = 220;
+      ctx.fillStyle = '#0c0714'; ctx.fillRect(avatarX, avatarY, avatarSize, avatarSize);
+      ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 6;
       ctx.strokeRect(avatarX, avatarY, avatarSize, avatarSize);
 
-      // Draw Avatar Image or Fallback
-      if (avatarUrl) {
-        try {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.src = avatarUrl;
-          await new Promise((resolve) => {
-            img.onload = resolve;
-            img.onerror = resolve; // Continue if CORS blocked
-          });
-          if (img.complete && img.naturalWidth !== 0) {
-            ctx.drawImage(img, avatarX + 8, avatarY + 8, avatarSize - 16, avatarSize - 16);
-          } else {
-            drawFallbackAvatar(ctx, avatarX + 8, avatarY + 8, avatarSize - 16);
-          }
-        } catch (e) {
-          drawFallbackAvatar(ctx, avatarX + 8, avatarY + 8, avatarSize - 16);
+      // Try loading real X avatar
+      try {
+        // Fetch as blob so a non-CORS response fails here instead of tainting the canvas
+        const blob = await fetch(avatarUrl, { mode: 'cors' }).then((r) => (r.ok ? r.blob() : Promise.reject()));
+        const img = new Image();
+        img.src = URL.createObjectURL(blob);
+        await new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; });
+        if (img.complete && img.naturalWidth !== 0) {
+          ctx.drawImage(img, avatarX + 8, avatarY + 8, avatarSize - 16, avatarSize - 16);
+        } else {
+          ctx.fillStyle = '#1c122b'; ctx.fillRect(avatarX + 8, avatarY + 8, avatarSize - 16, avatarSize - 16);
+          ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 72px monospace'; ctx.textAlign = 'center';
+          ctx.fillText('⛏️', avatarX + avatarSize / 2, avatarY + avatarSize / 2 + 24);
+          ctx.textAlign = 'left';
         }
-      } else {
-        drawFallbackAvatar(ctx, avatarX + 8, avatarY + 8, avatarSize - 16);
+      } catch {
+        ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 64px monospace'; ctx.textAlign = 'center';
+        ctx.fillText('⛏️', avatarX + avatarSize / 2, avatarY + avatarSize / 2 + 20);
+        ctx.textAlign = 'left';
       }
 
-      // Rank Pill under photo
-      ctx.fillStyle = isGuaranteed ? '#fbbf24' : '#0284c7';
-      ctx.fillRect(avatarX, avatarY + avatarSize + 15, avatarSize, 50);
-      ctx.fillStyle = isGuaranteed ? '#000000' : '#ffffff';
-      ctx.font = 'bold 22px monospace';
-      ctx.textAlign = 'center';
+      // Rank badge
+      ctx.fillStyle = '#fbbf24'; ctx.fillRect(avatarX, avatarY + avatarSize + 15, avatarSize, 50);
+      ctx.fillStyle = '#000000'; ctx.font = 'bold 22px monospace'; ctx.textAlign = 'center';
       ctx.fillText(`MINER #${rank}`, avatarX + avatarSize / 2, avatarY + avatarSize + 48);
+
+      // Status PENDING
+      ctx.fillStyle = '#7c2d12'; ctx.fillRect(avatarX, avatarY + avatarSize + 75, avatarSize, 40);
+      ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2; ctx.strokeRect(avatarX, avatarY + avatarSize + 75, avatarSize, 40);
+      ctx.fillStyle = '#fb923c'; ctx.font = 'bold 15px monospace';
+      ctx.fillText('⏳ PENDING APPROVAL', avatarX + avatarSize / 2, avatarY + avatarSize + 101);
       ctx.textAlign = 'left';
 
-      // Status Pill
-      ctx.fillStyle = isGuaranteed ? '#14532d' : '#1e3a8a';
-      ctx.fillRect(avatarX, avatarY + avatarSize + 75, avatarSize, 40);
-      ctx.fillStyle = isGuaranteed ? '#86efac' : '#93c5fd';
-      ctx.font = 'bold 16px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(isGuaranteed ? '★ GUARANTEED MINT' : '◆ FCFS ALLOWLIST', avatarX + avatarSize / 2, avatarY + avatarSize + 101);
-      ctx.textAlign = 'left';
-
-      // Right: Worker Credentials Table
-      const credX = 340;
-      let credY = 185;
-
-      const drawField = (label: string, value: string, color: string = '#fef3c7', isBig: boolean = false) => {
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '16px monospace';
-        ctx.fillText(label, credX, credY);
-
-        ctx.fillStyle = color;
-        ctx.font = isBig ? 'bold 32px monospace' : 'bold 24px monospace';
-        ctx.fillText(value, credX, credY + (isBig ? 36 : 28));
-
-        credY += isBig ? 75 : 62;
+      // Right: credentials
+      const credX = 340; let credY = 185;
+      const drawField = (label: string, value: string, color = '#fef3c7', big = false) => {
+        ctx.fillStyle = '#94a3b8'; ctx.font = '16px monospace'; ctx.fillText(label, credX, credY);
+        ctx.fillStyle = color; ctx.font = `bold ${big ? 32 : 24}px monospace`;
+        ctx.fillText(value, credX, credY + (big ? 36 : 28));
+        credY += big ? 75 : 62;
       };
-
       drawField('OPERATOR HANDLE', `@${cleanHandle}`, '#fbbf24', true);
       drawField('ROBINHOOD CHAIN WALLET', maskedWallet, '#38bdf8');
-      drawField('ALLOWLIST SCORE', `${points} POINTS (+10 BASE)`, '#4ade80');
-      drawField('RECRUITS IN MINES', `${referrals} MINERS INVITED`, '#fde047');
+      drawField('TASKS COMPLETED', `${completedCount}/${totalTasks} COMPLETED`, '#4ade80');
+      drawField('ALLOWLIST STATUS', isFullyApproved ? 'REVIEW IN PROGRESS' : 'PENDING TASKS', '#fb923c');
 
-      // Bottom Barcode & Seal Bar
-      ctx.fillStyle = '#1e1329';
-      ctx.fillRect(36, 560, 1128, 80);
-      ctx.strokeStyle = '#3d275e';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(36, 560, 1128, 80);
+      // Bottom strip
+      ctx.fillStyle = '#1e1329'; ctx.fillRect(36, 560, 1128, 80);
+      ctx.strokeStyle = '#3d275e'; ctx.lineWidth = 2; ctx.strokeRect(36, 560, 1128, 80);
 
-      // Simulated Pixel Barcode
+      // Barcode
       ctx.fillStyle = '#ffffff';
-      const barcodeX = 60;
-      const barY = 575;
-      const bars = [4, 2, 8, 3, 6, 2, 10, 4, 3, 6, 2, 8, 4, 2, 10, 3, 6, 4, 8, 2, 6, 4, 2, 8];
-      let currentBx = barcodeX;
-      bars.forEach((width, i) => {
-        if (i % 2 === 0) {
-          ctx.fillRect(currentBx, barY, width, 45);
-        }
-        currentBx += width + 2;
+      let bx = 60;
+      [4,2,8,3,6,2,10,4,3,6,2,8,4,2,10,3,6,4,8,2,6,4,2,8].forEach((w, i) => {
+        if (i % 2 === 0) ctx.fillRect(bx, 575, w, 45);
+        bx += w + 2;
       });
+      ctx.fillStyle = '#94a3b8'; ctx.font = '12px monospace';
+      ctx.fillText(`ID-${refCode.toUpperCase()}`, 60, 632);
 
-      // Barcode subtext
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '12px monospace';
-      ctx.fillText(`ID-${refCode.toUpperCase()}`, barcodeX, 632);
+      ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 20px monospace';
+      ctx.fillText(`JOIN: ${referralUrl.replace(/^https?:\/\//, '')}`, 360, 608);
+      ctx.fillStyle = '#fb923c'; ctx.font = 'bold 15px monospace';
+      ctx.fillText('FREE MINT • ROBINHOOD CHAIN', 880, 608);
 
-      // Center: Watermark / Referral Link
-      ctx.fillStyle = '#fbbf24';
-      ctx.font = 'bold 20px monospace';
-      ctx.fillText(`DIG WITH ME: ${referralUrl.replace(/^https?:\/\//, '')}`, 360, 608);
+      const fileName = `burrow-miner-${cleanHandle}.png`;
+      const pngBlob: Blob | null = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+      if (!pngBlob) throw new Error('Canvas export failed');
 
-      // Right Seal
-      ctx.fillStyle = '#fbbf24';
-      ctx.font = 'bold 15px monospace';
-      ctx.fillText('FREE MINT • 0 ETH GAS ONLY', 880, 608);
+      // Mobile: use native share sheet (lets users save to Photos) when available
+      const file = new File([pngBlob], fileName, { type: 'image/png' });
+      const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean };
+      if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && nav.canShare?.({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: 'My Burrow Miner Card' }); return; } catch { /* fall through to download */ }
+      }
 
-      // Convert to downloadable file
-      const dataUrl = canvas.toDataURL('image/png');
-      const downloadLink = document.createElement('a');
-      downloadLink.href = dataUrl;
-      downloadLink.download = `burrow-miner-card-${cleanHandle}.png`;
-      downloadLink.click();
+      const url = URL.createObjectURL(pngBlob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
-      console.error('Failed to generate PNG card:', err);
+      console.error('PNG generation failed:', err);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // Helper for drawing a retro miner avatar inside canvas if image fails
-  const drawFallbackAvatar = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => {
-    ctx.fillStyle = '#1c122b';
-    ctx.fillRect(x, y, size, size);
-    ctx.fillStyle = '#fbbf24';
-    ctx.font = 'bold 64px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('⛏️', x + size / 2, y + size / 2 + 20);
-    ctx.textAlign = 'left';
-  };
-
   const handleShareTweet = () => {
     sounds.playClick();
-    const tweetText = `Just secured my verified Miner Card for @Burrow! 2,500 pixel workers with a free mint on Robinhood Chain. I'm Miner #${rank}. Dig with me: ${referralUrl}`;
+    const tweetText = `I just secured my Burrow Miner Permit! 2,500 pixel workers, free mint on Robinhood Chain.\n\nMiner #${rank} — pending approval.\n\nJoin with my link: ${referralUrl}\n\n@BurrowRH`;
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
   };
 
   return (
     <div className="w-full">
-      {/* Visual Miner ID Card Container */}
+      {/* Visual Miner ID Card */}
       <div
         ref={cardRef}
-        className="relative bg-gradient-to-br from-[#1c122b] via-[#140c1f] to-[#0c0714] border-4 border-burrow-gold shadow-pixel-lg p-5 sm:p-7 overflow-hidden select-none transition-transform hover:scale-[1.01]"
+        className="relative bg-gradient-to-br from-[#1c122b] via-[#140c1f] to-[#0c0714] border-4 border-burrow-gold shadow-pixel-lg p-4 sm:p-7 overflow-hidden select-none"
       >
-        {/* Lanyard Hole at the top */}
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 w-16 h-3 bg-burrow-darkest border-2 border-burrow-border rounded-full flex items-center justify-center">
-          <div className="w-8 h-1 bg-burrow-card rounded-full"></div>
-        </div>
+        {/* Lanyard hole */}
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 w-16 h-3 bg-burrow-darkest border-2 border-burrow-border rounded-full" />
 
-        {/* Top Header */}
-        <div className="flex items-center justify-between border-b-2 border-burrow-border pb-3 pt-2 mb-5">
-          <div className="flex items-center gap-2">
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-burrow-border pb-3 pt-2 mb-5">
+          <div className="flex items-center gap-2 min-w-0">
             <PixelPickaxe size={20} />
-            <span className="font-pixel text-xs sm:text-sm text-burrow-gold tracking-wide">
-              BURROW MINING PERMIT
-            </span>
+            <span className="font-pixel text-[11px] sm:text-sm text-burrow-gold leading-tight">BURROW MINING PERMIT</span>
           </div>
-          <span className="bg-emerald-950/80 border border-emerald-500 text-emerald-400 font-pixel text-[9px] sm:text-[10px] px-2 py-0.5">
+          <span className="bg-emerald-950/80 border border-emerald-500 text-emerald-400 font-pixel text-[9px] px-2 py-0.5 whitespace-nowrap">
             ROBINHOOD CHAIN 4663
           </span>
         </div>
 
-        {/* Main Body */}
+        {/* Body */}
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6">
-          {/* Avatar & Photo Frame */}
+          {/* Avatar — real X/Twitter PFP via unavatar.io */}
           <div className="flex flex-col items-center shrink-0">
-            <div className="relative p-1.5 bg-burrow-darkest border-3 border-burrow-gold shadow-pixel-sm">
+            <div className="relative p-1 bg-burrow-darkest border-4 border-burrow-gold shadow-[0_0_20px_rgba(251,191,36,0.3)]">
               <img
-                src={avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanHandle}`}
-                alt={cleanHandle}
-                className="w-24 h-24 sm:w-28 sm:h-28 object-cover bg-burrow-surface border border-burrow-border"
+                src={avatarUrl}
+                alt={`@${cleanHandle} profile picture`}
+                className="w-28 h-28 sm:w-32 sm:h-32 object-cover bg-burrow-surface"
+                onError={(e) => {
+                  // Fallback to pixel-art avatar if unavatar fails
+                  (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/pixel-art/svg?seed=${cleanHandle}`;
+                }}
               />
-              <div className="absolute top-0 right-0 bg-emerald-500 text-black p-0.5 border border-black">
-                <CheckCircle size={14} />
-              </div>
             </div>
 
-            <div className="mt-2 text-center w-full">
-              <span className="inline-block bg-burrow-gold text-black font-pixel text-xs px-2.5 py-1 font-bold shadow-pixel-sm w-full">
+            {/* Rank badge */}
+            <div className="mt-2 w-32 sm:w-36 text-center">
+              <span className="block bg-burrow-gold text-black font-pixel text-xs px-2 py-1 font-bold shadow-pixel-sm w-full">
                 MINER #{rank}
               </span>
-              <span className={`block mt-1 text-[9px] font-pixel px-1.5 py-0.5 border ${
-                isGuaranteed
-                  ? 'bg-emerald-950/80 border-emerald-500 text-emerald-400'
-                  : 'bg-sky-950/80 border-sky-500 text-sky-300'
-              }`}>
-                {isGuaranteed ? '★ GUARANTEED' : '◆ FCFS PHASE'}
+              {/* PENDING instead of GUARANTEED */}
+              <span className="block mt-1 text-[9px] font-pixel px-1.5 py-0.5 bg-orange-950/80 border border-orange-500 text-orange-400">
+                ⏳ PENDING
               </span>
             </div>
           </div>
 
-          {/* Details Column */}
-          <div className="flex-1 w-full space-y-3 text-left">
+          {/* Details */}
+          <div className="flex-1 w-full space-y-3">
             <div>
-              <p className="text-[10px] font-silkscreen text-burrow-muted">MINER HANDLE</p>
-              <h3 className="font-pixel text-base sm:text-lg text-burrow-cream flex items-center gap-1.5">
-                <span>@{cleanHandle}</span>
-              </h3>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-burrow-darkest/70 p-2 border border-burrow-border">
-                <p className="text-[9px] font-pixel text-burrow-muted">TOTAL POINTS</p>
-                <p className="font-pixel text-sm text-burrow-gold mt-0.5">
-                  {points} <span className="text-[9px]">PTS</span>
-                </p>
-              </div>
-
-              <div className="bg-burrow-darkest/70 p-2 border border-burrow-border">
-                <p className="text-[9px] font-pixel text-burrow-muted">CREW RECRUITS</p>
-                <p className="font-pixel text-sm text-emerald-400 mt-0.5">
-                  {referrals} <span className="text-[9px]">MINERS</span>
-                </p>
-              </div>
+              <p className="text-[9px] font-silkscreen text-burrow-muted">MINER HANDLE</p>
+              <h3 className="font-pixel text-sm sm:text-xl text-burrow-cream break-all">@{cleanHandle}</h3>
             </div>
 
             <div className="bg-burrow-darkest/70 p-2 border border-burrow-border">
               <p className="text-[9px] font-pixel text-burrow-muted">REGISTERED EVM WALLET</p>
-              <p className="font-mono text-xs text-sky-300 truncate">
-                {wallet}
-              </p>
+              <p className="font-mono text-xs text-sky-300 break-all">{wallet}</p>
+            </div>
+
+            {/* Task Progress */}
+            <div className="bg-burrow-darkest/70 p-2 border border-burrow-border">
+              <p className="text-[9px] font-pixel text-burrow-muted mb-2">TASKS COMPLETED</p>
+              <div className="grid grid-cols-2 gap-1">
+                {BURROW_CONFIG.tasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className={`flex items-center gap-1.5 text-[10px] font-silkscreen px-2 py-1 border ${
+                      tasksCompleted[task.id]
+                        ? 'bg-emerald-950/50 border-emerald-600 text-emerald-400'
+                        : 'bg-burrow-surface/50 border-burrow-border text-burrow-muted'
+                    }`}
+                  >
+                    <span>{tasksCompleted[task.id] ? '✓' : '○'}</span>
+                    <span className="capitalize">{task.action}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Bottom Barcode Strip */}
+        {/* Bottom barcode */}
         <div className="mt-5 pt-3 border-t-2 border-burrow-border flex items-center justify-between text-[10px] font-silkscreen text-burrow-muted">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-[9px] tracking-widest text-burrow-cream select-all">
-              ||| |||| | ||||| | ||
-            </span>
-            <span className="text-[9px] font-pixel text-burrow-gold">
-              PASS #{refCode.toUpperCase()}
-            </span>
-          </div>
-          <span className="font-pixel text-[9px] text-amber-300 hidden sm:inline">
-            FREE MINT • 2,500 WORKERS
-          </span>
+          <span className="font-mono text-[9px] tracking-widest text-burrow-cream">||| |||| | ||||| | ||</span>
+          <span className="text-[9px] font-pixel text-burrow-gold">PASS #{refCode.toUpperCase()}</span>
         </div>
       </div>
 
-      {/* Action Buttons: Download PNG & Share on X */}
+      {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row gap-3 mt-4">
         <button
           onClick={handleDownloadPng}
@@ -353,7 +284,7 @@ export function MinerIdCard({
           className="flex-1 py-3 px-4 bg-burrow-gold hover:bg-yellow-400 text-black font-pixel text-xs border-2 border-amber-200 shadow-pixel flex items-center justify-center gap-2 font-bold transition-transform active:translate-y-0.5"
         >
           <Camera size={16} />
-          <span>{isGenerating ? 'GENERATING PNG...' : 'DOWNLOAD MINER CARD (PNG)'}</span>
+          <span>{isGenerating ? 'GENERATING...' : 'DOWNLOAD MINER CARD (PNG)'}</span>
         </button>
 
         <button
@@ -361,7 +292,7 @@ export function MinerIdCard({
           className="flex-1 py-3 px-4 bg-sky-500 hover:bg-sky-400 text-black font-pixel text-xs border-2 border-sky-300 shadow-pixel flex items-center justify-center gap-2 font-bold transition-transform active:translate-y-0.5"
         >
           <Twitter size={16} />
-          <span>SHARE CARD ON X (+5 PTS)</span>
+          <span>SHARE ON X</span>
         </button>
       </div>
     </div>

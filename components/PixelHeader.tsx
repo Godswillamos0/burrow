@@ -107,10 +107,10 @@ export function PixelHeader({ onOpenAdmin }: PixelHeaderProps) {
             rel="noopener noreferrer"
             onClick={() => sounds.playClick()}
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-black/60 border-2 border-sky-500/50 hover:border-sky-400 text-sky-400 text-[10px] font-pixel shadow-pixel-sm transition-all"
-            title="Follow Burrow on X"
+            title="Follow @BurrowRH on X"
           >
             <Twitter size={14} />
-            <span className="hidden sm:inline">@Burrow</span>
+            <span className="hidden sm:inline">@BurrowRH</span>
           </a>
 
           {/* Admin Allowlist Access */}
