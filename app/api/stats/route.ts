@@ -1,20 +1,19 @@
 import { NextResponse } from 'next/server';
-import { getLeaderboardAndStats } from '@/lib/storage';
+import { getLeaderboardAndStats, StorageNotConfiguredError } from '@/lib/storage';
 
+export const dynamic = 'force-dynamic';
+
+// Real sign-up count + top 10 referrers. Cached 30s in-process and at the CDN (Cloudflare).
 export async function GET() {
   try {
-    const stats = await getLeaderboardAndStats();
-
-    return NextResponse.json(stats, {
-      status: 200,
-      headers: {
-        'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30',
-      },
-    });
-  } catch (err: any) {
+    const { totalSignups, leaderboard } = await getLeaderboardAndStats();
     return NextResponse.json(
-      { error: 'Failed to fetch waitlist statistics', details: err.message },
-      { status: 500 }
+      { totalSignups, leaderboard },
+      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=30, stale-while-revalidate=30' } }
     );
+  } catch (err) {
+    const status = err instanceof StorageNotConfiguredError ? 503 : 500;
+    console.error('Stats error:', err);
+    return NextResponse.json({ error: 'Failed to fetch waitlist statistics' }, { status });
   }
 }

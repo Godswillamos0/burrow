@@ -62,7 +62,4 @@ export const BURROW_CONFIG = {
     cookieName: 'burrow_ref',
     cookieMaxAge: 60 * 60 * 24 * 30, // 30 days
   },
-  admin: {
-    defaultSecret: 'burrow-secret-key-2026',
-  },
 };

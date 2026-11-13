@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { sounds } from '@/lib/audio';
-import { BURROW_CONFIG } from '@/lib/config';
 import { X, Shield, Download, FileText, CheckCircle, Search, Key } from 'lucide-react';
 
 interface AdminModalProps {
@@ -11,7 +10,7 @@ interface AdminModalProps {
 }
 
 export function AdminModal({ isOpen, onClose }: AdminModalProps) {
-  const [adminKey, setAdminKey] = useState(BURROW_CONFIG.admin.defaultSecret);
+  const [adminKey, setAdminKey] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [guaranteedCutoff, setGuaranteedCutoff] = useState(500);
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,9 +27,12 @@ export function AdminModal({ isOpen, onClose }: AdminModalProps) {
     setErrorMsg(null);
 
     try {
-      const res = await fetch(`/api/admin/export?key=${encodeURIComponent(adminKey)}&format=json`);
+      const res = await fetch('/api/admin/export?format=json', {
+        headers: { Authorization: `Bearer ${adminKey}` },
+      });
       if (!res.ok) {
-        throw new Error('Invalid Admin Secret Key');
+        const body = await res.json().catch(() => ({}));
+        throw new Error(res.status === 401 ? 'Invalid Admin Secret Key' : body.error || 'Export failed');
       }
       const data = await res.json();
       setEntries(data.entries || []);
@@ -44,9 +46,27 @@ export function AdminModal({ isOpen, onClose }: AdminModalProps) {
     }
   };
 
-  const handleDownloadCsv = () => {
+  // Fetch with the key in a header (not the URL) so it never lands in logs or history
+  const handleDownloadCsv = async () => {
     sounds.playCoin();
-    window.location.href = `/api/admin/export?key=${encodeURIComponent(adminKey)}&format=csv`;
+    try {
+      const res = await fetch('/api/admin/export?format=csv', {
+        headers: { Authorization: `Bearer ${adminKey}` },
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `burrow-allowlist-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Export failed');
+      sounds.playError();
+    }
   };
 
   const filteredEntries = entries.filter((e) => {
@@ -104,7 +124,7 @@ export function AdminModal({ isOpen, onClose }: AdminModalProps) {
                 />
               </div>
               <p className="text-[10px] font-silkscreen text-burrow-muted mt-2">
-                Default dev secret: <code className="text-burrow-gold font-mono">{BURROW_CONFIG.admin.defaultSecret}</code>
+                The ADMIN_SECRET_KEY set on the server.
               </p>
             </div>
 

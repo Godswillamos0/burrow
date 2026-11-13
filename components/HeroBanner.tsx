@@ -7,7 +7,7 @@ import { BURROW_CONFIG } from '@/lib/config';
 import { Sparkles, Users, Flame, Pickaxe, ExternalLink } from 'lucide-react';
 
 interface HeroBannerProps {
-  totalSignups: number;
+  totalSignups: number | null;
   onScrollToJoin: () => void;
 }
 
@@ -38,7 +38,7 @@ export function HeroBanner({ totalSignups, onScrollToJoin }: HeroBannerProps) {
             <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
           </span>
           <span className="font-pixel text-xs sm:text-sm text-burrow-cream">
-            <span className="text-burrow-gold font-bold">{totalSignups.toLocaleString()}</span> MINERS WAITING IN LINE
+            <span className="text-burrow-gold font-bold">{totalSignups === null ? '…' : totalSignups.toLocaleString()}</span> MINERS WAITING IN LINE
           </span>
           <span className="hidden sm:inline-block text-[10px] font-pixel text-amber-300/80 bg-amber-950/60 px-2 py-0.5 border border-amber-600/50">
             LIVE SNAPSHOT

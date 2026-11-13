@@ -1,20 +1,9 @@
 import { NextResponse } from 'next/server';
-import { nanoid } from 'nanoid';
+import { issueNonce } from '@/lib/security';
 
-// In-memory or session nonce store
-const nonces = new Map<string, number>();
+export const dynamic = 'force-dynamic';
 
+// Signed, short-lived nonce (15 min). Verified statelessly in /api/join.
 export async function GET() {
-  const nonce = nanoid(8);
-  nonces.set(nonce, Date.now());
-
-  // Clean old nonces older than 15 minutes
-  const now = Date.now();
-  nonces.forEach((timestamp, n) => {
-    if (now - timestamp > 15 * 60 * 1000) {
-      nonces.delete(n);
-    }
-  });
-
-  return NextResponse.json({ nonce });
+  return NextResponse.json({ nonce: issueNonce() }, { headers: { 'Cache-Control': 'no-store' } });
 }

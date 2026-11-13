@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PixelHeader } from '@/components/PixelHeader';
 import { HeroBanner } from '@/components/HeroBanner';
 import { JoinSection } from '@/components/JoinSection';
@@ -12,38 +12,34 @@ import { AdminModal } from '@/components/AdminModal';
 import { BURROW_CONFIG } from '@/lib/config';
 
 export default function HomePage() {
-  const [totalSignups, setTotalSignups] = useState(1284);
+  const [totalSignups, setTotalSignups] = useState<number | null>(null);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [referralCookie, setReferralCookie] = useState<string | null>(null);
 
-  // Fetch initial stats
-  useEffect(() => {
-    // Check referral cookie from document.cookie
-    if (typeof document !== 'undefined') {
-      const match = document.cookie.match(new RegExp('(^| )' + BURROW_CONFIG.referral.cookieName + '=([^;]+)'));
-      if (match) {
-        setReferralCookie(match[2]);
-      }
+  const loadStats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/stats');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data.totalSignups === 'number') setTotalSignups(data.totalSignups);
+      if (Array.isArray(data.leaderboard)) setLeaderboard(data.leaderboard);
+    } catch (err) {
+      console.error('Failed to load stats:', err);
     }
+  }, []);
 
-    const loadStats = async () => {
-      try {
-        const res = await fetch('/api/stats');
-        const data = await res.json();
-        if (data.totalSignups) {
-          setTotalSignups(data.totalSignups);
-        }
-        if (data.leaderboard) {
-          setLeaderboard(data.leaderboard);
-        }
-      } catch (err) {
-        console.error('Failed to load initial stats:', err);
-      }
-    };
+  // Live counter + leaderboard: load now, then refresh every 30s while the tab is visible
+  useEffect(() => {
+    const match = document.cookie.match(new RegExp('(^| )' + BURROW_CONFIG.referral.cookieName + '=([^;]+)'));
+    if (match) setReferralCookie(decodeURIComponent(match[2]));
 
     loadStats();
-  }, []);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') loadStats();
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [loadStats]);
 
   const scrollToJoin = () => {
     const el = document.getElementById('join-section');
@@ -52,8 +48,9 @@ export default function HomePage() {
     }
   };
 
-  const handleJoinSuccess = (entry: any, position: number) => {
-    setTotalSignups((prev) => prev + 1);
+  const handleJoinSuccess = () => {
+    setReferralCookie(null);
+    loadStats();
   };
 
   return (

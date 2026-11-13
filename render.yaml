@@ -4,21 +4,40 @@ services:
     env: node
     plan: free
     region: oregon
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm start
+    healthCheckPath: /api/nonce
     envVars:
       - key: NODE_VERSION
         value: 20.17.0
+      # Supabase (required — production refuses sign-ups without it)
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      # Admin CSV export + wallet nonce signing
       - key: ADMIN_SECRET_KEY
         generateValue: true
+      - key: NONCE_SECRET
+        generateValue: true
+      # Public URL (your Cloudflare-proxied custom domain once set up)
       - key: NEXT_PUBLIC_SITE_URL
-        value: https://burrow-waitlist.onrender.com
+        sync: false
+      # WalletConnect / Reown project ID for mobile wallets
+      - key: NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+        sync: false
+      # Cloudflare Turnstile
+      - key: NEXT_PUBLIC_TURNSTILE_SITE_KEY
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      # Upstash Redis rate limiting (optional)
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
       - key: NEXT_PUBLIC_CHAIN_ID
         value: "4663"
       - key: NEXT_PUBLIC_RPC_URL

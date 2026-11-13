@@ -8,6 +8,7 @@ import { Download, Twitter, Camera } from 'lucide-react';
 
 interface MinerIdCardProps {
   handle: string;
+  avatar?: string | null; // verified X avatar from sign-in, if available
   wallet: string;
   rank: number;
   refCode: string;
@@ -22,6 +23,7 @@ export function getAvatarUrl(handle: string): string {
 
 export function MinerIdCard({
   handle,
+  avatar,
   wallet,
   rank,
   refCode,
@@ -31,11 +33,12 @@ export function MinerIdCard({
   const cardRef = useRef<HTMLDivElement | null>(null);
 
   const cleanHandle = handle.replace(/^@/, '');
-  const avatarUrl = getAvatarUrl(cleanHandle);
+  // Prefer the verified avatar (pbs.twimg.com, CORS-enabled); fall back to unavatar.io
+  const avatarUrl = avatar && avatar.startsWith('https://pbs.twimg.com/') ? avatar : getAvatarUrl(cleanHandle);
   const maskedWallet = wallet ? `${wallet.slice(0, 6)}...${wallet.slice(-4)}` : '0x000...000';
   const referralUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/r/${refCode}`
-    : `https://burrow.xyz/r/${refCode}`;
+    : `${process.env.NEXT_PUBLIC_SITE_URL || ""}/r/${refCode}`;
 
   const completedCount = Object.values(tasksCompleted).filter(Boolean).length;
   const totalTasks = BURROW_CONFIG.tasks.length;
@@ -182,8 +185,9 @@ export function MinerIdCard({
 
   const handleShareTweet = () => {
     sounds.playClick();
-    const tweetText = `I just secured my Burrow Miner Permit! 2,500 pixel workers, free mint on Robinhood Chain.\n\nMiner #${rank} — pending approval.\n\nJoin with my link: ${referralUrl}\n\n@BurrowRH`;
-    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
+    // Prewritten post from the build guide
+    const tweetText = `I just joined the ${BURROW_CONFIG.handle} waitlist. 2,500 miners, free mint on Robinhood Chain. Dig with me: ${referralUrl}`;
+    window.open(`https://x.com/intent/post?text=${encodeURIComponent(tweetText)}`, '_blank', 'noopener,noreferrer');
   };
 
   return (

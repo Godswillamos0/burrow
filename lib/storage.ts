@@ -16,7 +16,7 @@ export interface WaitlistEntry {
 }
 
 // Fallback in-memory store for local testing and initial preview
-let fallbackWaitlist: WaitlistEntry[] = [
+const fallbackWaitlist: WaitlistEntry[] = [
   {
     id: 'f-1',
     x_id: 'seed_1',
@@ -129,6 +129,41 @@ let fallbackWaitlist: WaitlistEntry[] = [
   },
 ];
 
+/**
+ * The in-memory store is ONLY for local development. In production a missing
+ * Supabase config is an error — otherwise sign-ups silently vanish on restart.
+ */
+const useDb = isSupabaseConfigured && Boolean(supabaseAdmin);
+const isProd = process.env.NODE_ENV === 'production';
+
+export class StorageNotConfiguredError extends Error {
+  constructor() {
+    super('The waitlist database is not configured yet. Please try again shortly.');
+    this.name = 'StorageNotConfiguredError';
+  }
+}
+
+export class DuplicateEntryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DuplicateEntryError';
+  }
+}
+
+function assertStorageReady() {
+  if (!useDb && isProd) throw new StorageNotConfiguredError();
+}
+
+export function maskWallet(wallet: string): string {
+  return wallet ? `${wallet.slice(0, 6)}...${wallet.slice(-4)}` : '';
+}
+
+function sortByRank(a: WaitlistEntry, b: WaitlistEntry) {
+  return b.points !== a.points
+    ? b.points - a.points
+    : new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+}
+
 // Helper to calculate rank given points & created_at
 function calculateRank(points: number, createdAt: string, all: WaitlistEntry[]): number {
   const higher = all.filter((item) => {
@@ -139,41 +174,32 @@ function calculateRank(points: number, createdAt: string, all: WaitlistEntry[]):
   return higher.length + 1;
 }
 
-export async function findByXId(xId: string): Promise<WaitlistEntry | null> {
-  if (isSupabaseConfigured && supabaseAdmin) {
-    const { data } = await supabaseAdmin
-      .from('waitlist')
-      .select('*')
-      .eq('x_id', xId)
-      .maybeSingle();
+async function findOne(column: 'x_id' | 'wallet' | 'ref_code', value: string): Promise<WaitlistEntry | null> {
+  assertStorageReady();
+  if (useDb) {
+    const { data, error } = await supabaseAdmin!.from('waitlist').select('*').eq(column, value).maybeSingle();
+    if (error) throw new Error(error.message);
     return data;
   }
-  return fallbackWaitlist.find((e) => e.x_id === xId) || null;
+  return fallbackWaitlist.find((e) => String(e[column] ?? '').toLowerCase() === value.toLowerCase()) || null;
 }
 
-export async function findByWallet(wallet: string): Promise<WaitlistEntry | null> {
-  const normalized = wallet.toLowerCase();
-  if (isSupabaseConfigured && supabaseAdmin) {
-    const { data } = await supabaseAdmin
-      .from('waitlist')
-      .select('*')
-      .eq('wallet', normalized)
-      .maybeSingle();
-    return data;
-  }
-  return fallbackWaitlist.find((e) => e.wallet.toLowerCase() === normalized) || null;
-}
+export const findByXId = (xId: string) => findOne('x_id', xId);
+export const findByWallet = (wallet: string) => findOne('wallet', wallet.toLowerCase());
+export const findByRefCode = (refCode: string) => findOne('ref_code', refCode);
 
-export async function findByRefCode(refCode: string): Promise<WaitlistEntry | null> {
-  if (isSupabaseConfigured && supabaseAdmin) {
-    const { data } = await supabaseAdmin
+/** Position in line: rows with more points, or equal points and an earlier sign-up, plus one. */
+export async function getPosition(entry: Pick<WaitlistEntry, 'points' | 'created_at'>): Promise<number> {
+  assertStorageReady();
+  if (useDb) {
+    const { count, error } = await supabaseAdmin!
       .from('waitlist')
-      .select('*')
-      .eq('ref_code', refCode)
-      .maybeSingle();
-    return data;
+      .select('id', { count: 'exact', head: true })
+      .or(`points.gt.${entry.points},and(points.eq.${entry.points},created_at.lt.${entry.created_at})`);
+    if (error) throw new Error(error.message);
+    return (count || 0) + 1;
   }
-  return fallbackWaitlist.find((e) => e.ref_code === refCode) || null;
+  return calculateRank(entry.points, entry.created_at, fallbackWaitlist);
 }
 
 export async function joinWaitlist({
@@ -186,18 +212,18 @@ export async function joinWaitlist({
 }: {
   xId: string;
   xHandle: string;
-  xAvatar?: string;
+  xAvatar?: string | null;
   wallet: string;
   refCode: string;
   referredBy?: string | null;
 }): Promise<{ entry: WaitlistEntry; position: number }> {
+  assertStorageReady();
   const normalizedWallet = wallet.toLowerCase();
   const cleanHandle = xHandle.replace(/^@/, '');
   const startingPoints = BURROW_CONFIG.referral.startingPoints;
 
-  if (isSupabaseConfigured && supabaseAdmin) {
-    // Insert row
-    const { data: newEntry, error } = await supabaseAdmin
+  if (useDb) {
+    const { data: newEntry, error } = await supabaseAdmin!
       .from('waitlist')
       .insert({
         x_id: xId,
@@ -213,28 +239,35 @@ export async function joinWaitlist({
       .single();
 
     if (error) {
-      if (error.code === 'PGRST205' || error.message?.includes('waitlist')) {
-        throw new Error("Supabase table 'waitlist' has not been created yet. Please execute the script in supabase/schema.sql in your Supabase SQL Editor.");
+      if (error.code === '23505') {
+        throw new DuplicateEntryError(
+          error.message.includes('wallet')
+            ? 'This wallet is already on the waitlist.'
+            : 'This X account is already on the waitlist.'
+        );
+      }
+      if (error.code === 'PGRST205' || error.code === '42P01') {
+        throw new Error("Supabase table 'waitlist' has not been created yet. Run supabase/schema.sql in the Supabase SQL Editor.");
       }
       throw new Error(error.message);
     }
 
-    // Credit referrer if valid
-    if (referredBy && referredBy !== refCode) {
-      await supabaseAdmin.rpc('credit_referrer', { code: referredBy });
+    // A referral only counts now: the new miner has finished X sign-in AND wallet signing
+    if (referredBy) {
+      const { error: rpcErr } = await supabaseAdmin!.rpc('credit_referrer', { code: referredBy });
+      if (rpcErr) console.warn('credit_referrer failed:', rpcErr.message);
     }
 
-    // Calculate position
-    const { count: higherCount } = await supabaseAdmin
-      .from('waitlist')
-      .select('*', { count: 'exact', head: true })
-      .or(`points.gt.${newEntry.points},and(points.eq.${newEntry.points},created_at.lt.${newEntry.created_at})`);
-
-    const position = (higherCount || 0) + 1;
-    return { entry: newEntry, position };
+    invalidateStatsCache();
+    return { entry: newEntry, position: await getPosition(newEntry) };
   }
 
-  // Fallback in-memory
+  // Dev-only in-memory store
+  if (fallbackWaitlist.some((e) => e.x_id === xId)) throw new DuplicateEntryError('This X account is already on the waitlist.');
+  if (fallbackWaitlist.some((e) => e.wallet.toLowerCase() === normalizedWallet)) {
+    throw new DuplicateEntryError('This wallet is already on the waitlist.');
+  }
+
   const newEntry: WaitlistEntry = {
     id: `entry-${Date.now()}`,
     x_id: xId,
@@ -248,8 +281,7 @@ export async function joinWaitlist({
     created_at: new Date().toISOString(),
   };
 
-  // Credit referrer
-  if (referredBy && referredBy !== refCode) {
+  if (referredBy) {
     const referrer = fallbackWaitlist.find((e) => e.ref_code === referredBy);
     if (referrer) {
       referrer.referrals += 1;
@@ -258,91 +290,104 @@ export async function joinWaitlist({
   }
 
   fallbackWaitlist.unshift(newEntry);
-  const position = calculateRank(newEntry.points, newEntry.created_at, fallbackWaitlist);
-
-  return { entry: newEntry, position };
+  invalidateStatsCache();
+  return { entry: newEntry, position: calculateRank(newEntry.points, newEntry.created_at, fallbackWaitlist) };
 }
 
-export async function getLeaderboardAndStats() {
-  if (isSupabaseConfigured && supabaseAdmin) {
-    try {
-      // Total count
-      const { count: totalSignups, error: countErr } = await supabaseAdmin
-        .from('waitlist')
-        .select('*', { count: 'exact', head: true });
+/* ─────────── Stats: real count + top 10, cached 30s per instance ─────────── */
 
-      // Top 10
-      const { data: top10, error: topErr } = await supabaseAdmin
+export interface LeaderboardRow {
+  id: string;
+  x_handle: string;
+  x_avatar?: string | null;
+  wallet: string; // masked
+  points: number;
+  referrals: number;
+  created_at: string;
+  rank: number;
+}
+
+export interface WaitlistStats {
+  totalSignups: number;
+  leaderboard: LeaderboardRow[];
+  isLiveDb: boolean;
+}
+
+const STATS_TTL_MS = 30_000;
+let statsCache: { at: number; data: WaitlistStats } | null = null;
+
+function invalidateStatsCache() {
+  statsCache = null;
+}
+
+export async function getLeaderboardAndStats(): Promise<WaitlistStats> {
+  if (statsCache && Date.now() - statsCache.at < STATS_TTL_MS) return statsCache.data;
+  assertStorageReady();
+
+  let data: WaitlistStats;
+
+  if (useDb) {
+    const [countRes, topRes] = await Promise.all([
+      supabaseAdmin!.from('waitlist').select('id', { count: 'exact', head: true }),
+      supabaseAdmin!
         .from('waitlist')
         .select('id, x_handle, x_avatar, wallet, points, referrals, created_at')
         .order('points', { ascending: false })
         .order('created_at', { ascending: true })
-        .limit(10);
+        .limit(10),
+    ]);
+    if (countRes.error) throw new Error(countRes.error.message);
+    if (topRes.error) throw new Error(topRes.error.message);
 
-      if (!countErr && !topErr && top10 && top10.length > 0) {
-        const formattedLeaderboard = top10.map((item, index) => ({
-          ...item,
-          rank: index + 1,
-        }));
-
-        return {
-          totalSignups: (totalSignups || 0) + 1240, // Base marketing seed offset
-          realCount: totalSignups || 0,
-          leaderboard: formattedLeaderboard,
-          isLiveDb: true,
-        };
-      }
-    } catch (err) {
-      console.warn('Supabase query error:', err);
-    }
+    data = {
+      totalSignups: countRes.count || 0,
+      leaderboard: (topRes.data || []).map((item, index) => ({
+        ...item,
+        wallet: maskWallet(item.wallet),
+        rank: index + 1,
+      })),
+      isLiveDb: true,
+    };
+  } else {
+    data = {
+      totalSignups: fallbackWaitlist.length,
+      leaderboard: [...fallbackWaitlist].sort(sortByRank).slice(0, 10).map((item, index) => ({
+        id: item.id,
+        x_handle: item.x_handle,
+        x_avatar: item.x_avatar,
+        wallet: maskWallet(item.wallet),
+        points: item.points,
+        referrals: item.referrals,
+        created_at: item.created_at,
+        rank: index + 1,
+      })),
+      isLiveDb: false,
+    };
   }
 
-  // Fallback in-memory
-  const sorted = [...fallbackWaitlist].sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-  });
-
-  const top10 = sorted.slice(0, 10).map((item, index) => ({
-    id: item.id,
-    x_handle: item.x_handle,
-    x_avatar: item.x_avatar,
-    wallet: item.wallet,
-    points: item.points,
-    referrals: item.referrals,
-    created_at: item.created_at,
-    rank: index + 1,
-  }));
-
-  return {
-    totalSignups: fallbackWaitlist.length + 1284,
-    realCount: fallbackWaitlist.length,
-    leaderboard: top10,
-    isLiveDb: false,
-  };
+  statsCache = { at: Date.now(), data };
+  return data;
 }
 
 export async function getAllWaitlistForExport(): Promise<WaitlistEntry[]> {
-  if (isSupabaseConfigured && supabaseAdmin) {
-    const { data } = await supabaseAdmin
-      .from('waitlist')
-      .select('*')
-      .order('points', { ascending: false })
-      .order('created_at', { ascending: true });
-
-    return (data || []).map((item, index) => ({
-      ...item,
-      rank: index + 1,
-    }));
+  assertStorageReady();
+  if (useDb) {
+    // Page through results so exports beyond 1,000 rows are complete
+    const pageSize = 1000;
+    const all: WaitlistEntry[] = [];
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabaseAdmin!
+        .from('waitlist')
+        .select('*')
+        .order('points', { ascending: false })
+        .order('created_at', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throw new Error(error.message);
+      all.push(...(data || []));
+      if (!data || data.length < pageSize) break;
+    }
+    return all.map((item, index) => ({ ...item, rank: index + 1 }));
   }
 
-  const sorted = [...fallbackWaitlist].sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-  });
-
-  return sorted.map((item, index) => ({
-    ...item,
-    rank: index + 1,
-  }));
+  return [...fallbackWaitlist].sort(sortByRank).map((item, index) => ({ ...item, rank: index + 1 }));
 }

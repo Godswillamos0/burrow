@@ -18,7 +18,7 @@ export interface LeaderboardEntry {
 
 interface LeaderboardProps {
   initialLeaderboard?: LeaderboardEntry[];
-  totalSignups: number;
+  totalSignups: number | null;
 }
 
 export function Leaderboard({ initialLeaderboard = [], totalSignups }: LeaderboardProps) {
@@ -43,14 +43,11 @@ export function Leaderboard({ initialLeaderboard = [], totalSignups }: Leaderboa
     }
   };
 
+  // The page polls /api/stats every 30s and passes fresh rows down
   useEffect(() => {
-    if (initialLeaderboard.length === 0) {
-      fetchStats(false);
-    }
-    // Poll every 30 seconds as specified in the guide
-    const interval = setInterval(() => fetchStats(false), 30000);
-    return () => clearInterval(interval);
-  }, []);
+    setLeaderboard(initialLeaderboard);
+    setLastUpdated(new Date());
+  }, [initialLeaderboard]);
 
   const getRankBadge = (rank: number) => {
     if (rank === 1) {
@@ -183,7 +180,7 @@ export function Leaderboard({ initialLeaderboard = [], totalSignups }: Leaderboa
         {/* Footer info */}
         <div className="mt-6 pt-4 border-t-2 border-burrow-border flex flex-col sm:flex-row items-center justify-between text-[11px] font-silkscreen text-burrow-muted gap-2">
           <div>
-            ⚡ Live cached feed (updates every 30s) • Total registered: <span className="text-burrow-gold font-pixel">{totalSignups.toLocaleString()}</span>
+            ⚡ Live cached feed (updates every 30s) • Total registered: <span className="text-burrow-gold font-pixel">{totalSignups === null ? '…' : totalSignups.toLocaleString()}</span>
           </div>
           <div className="text-emerald-400 font-pixel text-[10px]">
             100% BOT-FILTERED ON-CHAIN
